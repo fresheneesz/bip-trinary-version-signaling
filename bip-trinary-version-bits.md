@@ -260,7 +260,7 @@ Patterns of nVersion involving the top bits `011` as well as the meaning of bits
 
 ### **Modified thresholds**
 
-The thresholds do not have to be maintained for eternity, but changes should take the effect on the warning system into account. In particular, having a `lockin_blocks` that is incompatible with the one used for the warning system may have long-term effects, as the warning system cannot rely on a permanently detectable condition anymore.
+The thresholds do not have to be maintained for eternity, but changes should take the effect on the warning system into account. In particular, having a `lockedin_blocks` that is incompatible with the one used for the warning system may have long-term effects, as the warning system cannot rely on a permanently detectable condition anymore.
 
 ## Rationale
 
