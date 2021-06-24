@@ -82,7 +82,7 @@ The new consensus rules for each soft fork are enforced for each block that has 
 
 ### State transitions
 
-[![img](D:/billysFile/IDEAS/Cryptocurrency/bip-trinary-version-signaling/states.png)](https://github.com/bitcoin/bips/blob/master/bip-0008/states.png)
+![img](states.png)
 
 The genesis block has state DEFINED for each deployment, by definition.
 
@@ -201,7 +201,7 @@ min_threshold + (max_threshold-min_threshold)*fractionOfMaxPassingOpposition;
 
 The threshold calculated above has a linear relationship with the fraction of opposing signals. The following assumes the recommendations for `min_threshold` and `max_threshold` are used. If there is no opposition, only 60% support is needed to lock in the upgrade. If 5% of blocks are signaling opposition, 75% support signaling is required to lock in the upgrade. And if 10% of blocks are signaling opposition, all other 90% of blocks must be signaling support for the upgrade to lock in. This relationship both allows non-contentious upgrades to upgrade relatively easily and quickly while still allowing opposition to the upgrade to make lock in of the upgrade more difficult or fail entirely. 
 
-![img](D:/billysFile/IDEAS/Cryptocurrency/bip-trinary-version-signaling/thresholdChart.png)
+![img](thresholdChart.png)
 
 #### Implementation
 
@@ -241,12 +241,14 @@ TBD
 - Block heights are used for the deployment monotonic clock, rather than median-time-past.
 - Only 15 slots simultaneous upgrades are possible, vs 29 simultaneous upgrades.
 - In the most restrictive case, lock-in happens at 90% as opposed to BIP9's 95%, and lock-in can happen at substantially lower support signaling than that if there is little opposition. 
+- Contains `minimum_started_blocks` and `lockedin_blocks` settings to allow reasonable time between state changes.
 
 ## Contrasted with BIP 8
 
 - Only 15 slots simultaneous upgrades are possible, vs 29 simultaneous upgrades.
 - Lock-in can happen at significantly lower support signaling than BIP8's 90% supermajority requirement if there is little opposition. 
 - No LOT=true option. 
+- A combination of `minimum_started_blocks` and `lockedin_blocks` are used to determine activation height in a relative way instead of the absolute  `minimum_activation_height` setting.
 
 ## Backwards compatibility
 
