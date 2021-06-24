@@ -263,7 +263,7 @@ TBD
 - Only 15 slots simultaneous upgrades are possible, vs 29 simultaneous upgrades.
 - Lock-in can happen at significantly lower support signaling than BIP8's 90% supermajority requirement if there is little opposition. 
 - No LOT=true option. 
-- A combination of `minimum_started_blocks` and `lockedin_blocks` are used to determine activation height in a relative way instead of the absolute  `minimum_activation_height` setting.
+- A combination of `minimum_started_blocks`, `lockedin_blocks`, and `should_signal_blocks` are used to determine activation height in a relative way instead of the absolute  `minimum_activation_height` setting.
 - Has a SHOULD_SIGNAL state to give a monetary warning to stragglers to upgrade their node before the deployment becomes ACTIVE. This was inspired by the MUST_SIGNAL state in BIP8.
 
 ## Backwards compatibility
@@ -284,8 +284,10 @@ The thresholds do not have to be maintained for eternity, but changes should tak
   * 60% is a supermajority amount greater enough than 50% to be unlikely to be a fluke and also unlikely to change in the near future. IE if 60% of blocks signal support the upgrade now, its very unlikely that less than 50% of mining hashpower supports the upgrade, and also very unlikely that greater than 50% of mining hashpower would oppose the upgrade anytime in the next couple years.
 * Why is 90% signaling recommended as the `max_threshold`?
   * BIP8 recommends this value, and this BIP does not seek to change that standard in the case substantial opposition arises.
+* What is the rationale for the recommendations for `minimum_started_blocks`, `lockedin_blocks`, and `should_signal_blocks`?
+  * Time should be given at each state for the community to react including having discussion and performing upgrade procedures. Its expected that the fastest miners to upgrade will be much faster than the slowest, which is why the `minimum_started_blocks` is substantially shorter than `lockedin_blocks + should_signal_blocks`. 
 * What is the SHOULD_SIGNAL state for? 
-  * The SHOULD_SIGNAL state is intended to be a clear monetary signal to non-upgraded miners that they must upgrade or lose their revenue stream. Because about 12.5% of non-supporting blocks will be orphaned, non-signaling miners and mining pools should be alerted to the issue by any system that helps them monitor their revenue and the health of their mining system. Even if they have not been paying attention to the progression of the soft-fork, they should at this point be spurred to look into the issue.
+  * The SHOULD_SIGNAL state is intended to be a clear monetary signal to non-upgraded miners that they must upgrade or lose their revenue stream. Because almost 12.5% of non-supporting blocks will be orphaned, non-signaling miners and mining pools should be alerted to the issue by any system that helps them monitor their revenue and the health of their mining system. Even if they have not been paying attention to the progression of the soft-fork, they should at this point be spurred to look into the issue. 
 * How might the SHOULD_SIGNAL state affect the orphan rate and reorg risk?
   * In the near-worst case scenario, at least 60% of miners would be signaling support, leading to approximately 5% of all blocks being orphaned, which would lead to only about 5 two-block reorgs happening in a relevant retargeting period and a 6 block reorg would remain very very unlikely (> 4 chances in 10,000 retarget periods). 
 
