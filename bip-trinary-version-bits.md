@@ -30,10 +30,11 @@ Each soft fork deployment is specified by the following per-chain parameters (fu
 2. The **slot** determines which bits in the nVersion field of the block are to be used to signal about soft fork support or opposition. The slot is chosen from the set {0,1,2,...,15}. 
 3. The **start_height** specifies the height of the first block at which the bit gains its meaning.
 4. The **minimum_started_blocks** specifies the minimum number of blocks that must remain in STARTED state. No block before the block at height `start_height + minimum_activation_blocks` may become LOCKED_IN. 
-5. The **lockedin_blocks** specifies the minimum number of blocks that must remain in LOCKED_IN state. Once locked in, this number of blocks must remain in LOCKED_IN state before a block can be considered in ACTIVE state.
-6. The **timeout** specifies a number of blocks after the start_height at which the miner signaling ends. If the soft fork has not yet locked in (excluding the current block's bit state) when the block `start_height + timeout` has been reached, the deployment is considered failed on all descendants of the block.
-7. The **min_threshold** specifies the minimum number of approval-signaling blocks required in a retarget period for lock-in of the upgrade, in the case where no opposition signaling exists in a given retargeting period.
-8. The **max_threshold** specifies the maximum number of approval-signaling blocks required in a retarget period for lock-in of the upgrade, in the case where `100% - max_threshold` of blocks are signaling active opposition.
+5. The **lockedin_blocks** specifies the number of blocks that must remain in LOCKED_IN state, once the LOCKED_IN state begins before any block can be considered in SHOULD_SIGNAL state.
+6. **should_signal_blocks** specifies the number of blocks that must remain in SHOULD_SIGNAL state, once transitioning from the LOCKED_IN state, before any block can be considered in ACTIVE state.
+7. The **timeout** specifies a number of blocks after the start_height at which the miner signaling ends. If the soft fork has not yet locked in (excluding the current block's bit state) when the block `start_height + timeout` has been reached, the deployment is considered failed on all descendants of the block.
+8. The **min_threshold** specifies the minimum number of approval-signaling blocks required in a retarget period for lock-in of the upgrade, in the case where no opposition signaling exists in a given retargeting period.
+9. The **max_threshold** specifies the maximum number of approval-signaling blocks required in a retarget period for lock-in of the upgrade, in the case where `2016 - max_threshold` blocks are signaling active opposition.
 
 ### Selection guidelines
 
@@ -41,14 +42,15 @@ The following guidelines are suggested for selecting these parameters for a soft
 
 1. **name** should be selected such that no two soft forks, concurrent or otherwise, ever use the same name. For deployments described in a single BIP, it is recommended to use the name "bipN" where N is the appropriate BIP number.
 2. **slot** should be selected such that no two concurrent soft forks use the same slot. The slot chosen should not overlap with active usage (legitimately or otherwise) for other purposes. A later deployment using the same slot is possible as long as the start_height is after the previous one's timeout or activation, but it is discouraged until necessary, and even then recommended to have a pause in between to detect buggy software.
-3. **start_height** should be set to some block height in the future. 
-4. **minimum_started_blocks** should be set to at least the length of several retarget periods and should be set with the intention of giving the majority of economic activity enough time to upgrade to software including the activation parameters. 
-5. **lockedin_blocks** should be set to at least the length of several retarget periods and should be set with the intention of giving the majority of economic activity more than enough time to upgrade to software supporting the upgrade. A reasonable setting would be 6 retargeting periods (3 months).
-6. **timeout** should be set such that it is considered reasonable to expect the entire economy to upgrade in that time. Probably at least 1 year, or 52416 blocks (26 retarget intervals).
-7. The **min_threshold** should be 1210 blocks (60% of 2016), or 1008 (50%) for testnet.
-8. The **max_threshold** should be 1815 blocks (90% of 2016), or 1512 (75%) for testnet.
+3. **start_height** should be set to some block height after the expected release date of the software that includes the activation parameters. 
+4. **minimum_started_blocks** should be set to at least the length of several retarget periods and should be set with the intention of giving the majority (50%) of economic activity enough time to upgrade to software including the activation parameters. A reasonable setting would be 2 retargeting periods (1 month).
+5. **lockedin_blocks** should be set to at least the length of several retarget periods and should be set with the intention of giving the vast majority (90%) of economic activity enough time to upgrade to software supporting the upgrade. A reasonable setting would be 4 retargeting periods (2 months).
+6. **should_signal_blocks** should be set to at least the length of several retarget periods, with the intention of giving the vast majority (90%) of the remaining non-signaling nodes to upgrade their software. A reasonable setting would be 2 retargeting periods (1 month)
+7. **timeout** should be set such that it is considered reasonable to expect the entire economy to upgrade in that time. Probably at least 26 retarget periods (1 year).
+8. The **min_threshold** should be 1210 blocks (60% of 2016), or 1008 (50%) for testnet.
+9. The **max_threshold** should be 1815 blocks (90% of 2016), or 1512 (75%) for testnet.
 
-**start_height**, **timeout**, **minimum_started_blocks**, and **lockedin_blocks** must be exact multiples of 2016 (ie, at a retarget boundary).
+**start_height**, **timeout**, **minimum_started_blocks**, **lockedin_blocks**, and **should_signal_blocks** must be exact multiples of 2016 (ie, at a retarget boundary).
 
 ### States
 
@@ -57,8 +59,9 @@ With each block and soft fork, we associate a deployment state. The possible sta
 1. **DEFINED** is the first state that each soft fork starts out as. The genesis block is by definition in this state for each deployment.
 2. **STARTED** for blocks at or beyond the start_height. A soft fork remains in LOCKED_IN until at least `minimum_started_blocks` have passed since the start_height.
 3. **LOCKED_IN** for at least one retarget period after the first retarget period with STARTED blocks from which a number of blocks exceeding the threshold have the associated ternary slot set in nVersion. A soft fork remains in LOCKED_IN until `lockedin_blocks` have passed.
-4. **ACTIVE** for all blocks after the `lockedin_blocks` in LOCKED_IN state have passed.
-5. **FAILED** for all blocks after the `timeout` if LOCKED_IN is not reached.
+4. **SHOULD_SIGNAL** for at least one retarget period after the first retarget period with LOCKED_IN blocks. A soft fork remains in SHOULD_SIGNAL state until `should_signal_blocks` have passed. During this state, miners should only mine on blocks not signaling support for the upgrade if the hash of the block modulo 8 equals 0.
+5. **ACTIVE** for all blocks after the `should_signal_blocks` in SHOULD_SIGNAL state have passed.
+6. **FAILED** for all blocks after the `timeout` if LOCKED_IN is not reached.
 
 ### Bit flags
 
@@ -147,14 +150,25 @@ Note that a block's state never depends on its own nVersion; only on that of its
             return STARTED;
 ```
 
-After `lockedin_blocks`, we automatically transition to ACTIVE if the minimum activation height is reached. Otherwise LOCKED_IN continues.
+After `lockedin_blocks`, we automatically transition to SHOULD_SIGNAL. Otherwise LOCKED_IN continues.
 
 ```
         case LOCKED_IN:
             if (lockedin_height + lockedin_blocks <= block.height) {
-                return ACTIVE;
+                return SHOULD_SIGNAL;
             } else {
                 return LOCKED_IN;
+            }
+```
+
+After `should_signal_blocks`, we automatically transition to ACTIVE. Otherwise SHOULD_SIGNAL continues.
+
+```
+        case SHOULD_SIGNAL:
+            if (lockedin_height + lockedin_blocks <= block.height) {
+                return ACTIVE;
+            } else {
+                return SHOULD_SIGNAL;
             }
 ```
 
@@ -241,7 +255,8 @@ TBD
 - Block heights are used for the deployment monotonic clock, rather than median-time-past.
 - Only 15 slots simultaneous upgrades are possible, vs 29 simultaneous upgrades.
 - In the most restrictive case, lock-in happens at 90% as opposed to BIP9's 95%, and lock-in can happen at substantially lower support signaling than that if there is little opposition. 
-- Contains `minimum_started_blocks` and `lockedin_blocks` settings to allow reasonable time between state changes.
+- Has `minimum_started_blocks`, `lockedin_blocks`, and `should_signal_blocks` settings to allow reasonable time between state changes.
+- Has a SHOULD_SIGNAL state to give a monetary warning to stragglers to upgrade their node before the deployment becomes ACTIVE.
 
 ## Contrasted with BIP 8
 
@@ -249,6 +264,7 @@ TBD
 - Lock-in can happen at significantly lower support signaling than BIP8's 90% supermajority requirement if there is little opposition. 
 - No LOT=true option. 
 - A combination of `minimum_started_blocks` and `lockedin_blocks` are used to determine activation height in a relative way instead of the absolute  `minimum_activation_height` setting.
+- Has a SHOULD_SIGNAL state to give a monetary warning to stragglers to upgrade their node before the deployment becomes ACTIVE. This was inspired by the MUST_SIGNAL state in BIP8.
 
 ## Backwards compatibility
 
@@ -268,6 +284,10 @@ The thresholds do not have to be maintained for eternity, but changes should tak
   * 60% is a supermajority amount greater enough than 50% to be unlikely to be a fluke and also unlikely to change in the near future. IE if 60% of blocks signal support the upgrade now, its very unlikely that less than 50% of mining hashpower supports the upgrade, and also very unlikely that greater than 50% of mining hashpower would oppose the upgrade anytime in the next couple years.
 * Why is 90% signaling recommended as the `max_threshold`?
   * BIP8 recommends this value, and this BIP does not seek to change that standard in the case substantial opposition arises.
+* What is the SHOULD_SIGNAL state for? 
+  * The SHOULD_SIGNAL state is intended to be a clear monetary signal to non-upgraded miners that they must upgrade or lose their revenue stream. Because about 12.5% of non-supporting blocks will be orphaned, non-signaling miners and mining pools should be alerted to the issue by any system that helps them monitor their revenue and the health of their mining system. Even if they have not been paying attention to the progression of the soft-fork, they should at this point be spurred to look into the issue.
+* How might the SHOULD_SIGNAL state affect the orphan rate and reorg risk?
+  * In the near-worst case scenario, at least 60% of miners would be signaling support, leading to approximately 5% of all blocks being orphaned, which would lead to only about 5 two-block reorgs happening in a relevant retargeting period and a 6 block reorg would remain very very unlikely (> 4 chances in 10,000 retarget periods). 
 
 ## Alternative Designs
 
