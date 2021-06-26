@@ -32,7 +32,7 @@ Each soft fork deployment is specified by the following per-chain parameters (fu
 4. The **minimum_started_blocks** specifies the minimum number of blocks that must remain in STARTED state. No block before the block at height `start_height + minimum_activation_blocks` may become LOCKED_IN. 
 5. The **lockedin_blocks** specifies the number of blocks that must remain in LOCKED_IN state, once the LOCKED_IN state begins before any block can be considered in SHOULD_SIGNAL state.
 6. **should_signal_blocks** specifies the number of blocks that must remain in SHOULD_SIGNAL state, once transitioning from the LOCKED_IN state, before any block can be considered in ACTIVE state.
-7. The **timeout** specifies a number of blocks after the start_height at which the miner signaling ends. If the soft fork has not yet locked in (excluding the current block's bit state) when the block `start_height + timeout` has been reached, the deployment is considered failed on all descendants of the block.
+7. The **timeout** specifies a number of blocks after the start_height at which the miner signaling ends. If the soft fork has not yet locked in when the block `start_height + timeout` has been reached, the deployment is considered failed on all descendants of the block.
 8. The **min_threshold** specifies the minimum number of approval-signaling blocks required in a retarget period for lock-in of the upgrade, in the case where no opposition signaling exists in a given retargeting period.
 9. The **max_threshold** specifies the maximum number of approval-signaling blocks required in a retarget period for lock-in of the upgrade, in the case where `2016 - max_threshold` blocks are signaling active opposition.
 
@@ -45,7 +45,7 @@ The following guidelines are suggested for selecting these parameters for a soft
 3. **start_height** should be set to some block height after the expected release date of the software that includes the activation parameters. 
 4. **minimum_started_blocks** should be set to at least the length of several retarget periods and should be set with the intention of giving the majority (50%) of economic activity enough time to upgrade to software including the activation parameters. A reasonable setting would be 2 retargeting periods (1 month).
 5. **lockedin_blocks** should be set to at least the length of several retarget periods and should be set with the intention of giving the vast majority (90%) of economic activity enough time to upgrade to software supporting the upgrade. A reasonable setting would be 4 retargeting periods (2 months).
-6. **should_signal_blocks** should be set to at least the length of several retarget periods, with the intention of giving the vast majority (90%) of the remaining non-signaling nodes to upgrade their software. A reasonable setting would be 2 retargeting periods (1 month)
+6. **should_signal_blocks** should be set to the length of at least one retarget period, with the intention of giving the vast majority (90%) of the remaining non-signaling nodes to upgrade their software. A reasonable setting would be 2 retargeting periods (1 month)
 7. **timeout** should be set such that it is considered reasonable to expect the entire economy to upgrade in that time. Probably at least 26 retarget periods (1 year).
 8. The **min_threshold** should be 1210 blocks (60% of 2016), or 1008 (50%) for testnet.
 9. The **max_threshold** should be 1815 blocks (90% of 2016), or 1512 (75%) for testnet.
@@ -57,11 +57,11 @@ The following guidelines are suggested for selecting these parameters for a soft
 With each block and soft fork, we associate a deployment state. The possible states are:
 
 1. **DEFINED** is the first state that each soft fork starts out as. The genesis block is by definition in this state for each deployment.
-2. **STARTED** for blocks at or beyond the start_height. A soft fork remains in LOCKED_IN until at least `minimum_started_blocks` have passed since the start_height.
+2. **STARTED** for blocks at or beyond the start_height. A soft fork remains in STARTED state until at least `minimum_started_blocks` have passed since the start_height.
 3. **LOCKED_IN** for at least one retarget period after the first retarget period with STARTED blocks from which a number of blocks exceeding the threshold have the associated ternary slot set in nVersion. A soft fork remains in LOCKED_IN until `lockedin_blocks` have passed.
 4. **SHOULD_SIGNAL** for at least one retarget period after the first retarget period with LOCKED_IN blocks. A soft fork remains in SHOULD_SIGNAL state until `should_signal_blocks` have passed. During this state, miners should only mine on blocks not signaling support for the upgrade if the hash of the block modulo 8 equals 0.
 5. **ACTIVE** for all blocks after the `should_signal_blocks` in SHOULD_SIGNAL state have passed.
-6. **FAILED** for all blocks after the `timeout` if LOCKED_IN is not reached.
+6. **FAILED** for all blocks after the `timeout` if LOCKED_IN has not been reached.
 
 ### Bit flags
 
@@ -96,7 +96,7 @@ The genesis block has state DEFINED for each deployment, by definition.
         }
 ```
 
-All blocks within a retarget period have the same state. This means that if floor(block1.height / 2016) = floor(block2.height / 2016), they are guaranteed to have the same state for every deployment.
+All blocks within a retarget period have the same state. This means that if `floor(block1.height / 2016) = floor(block2.height / 2016)`, they are guaranteed to have the same state for every deployment.
 
 ```
         if ((block.height % 2016) != 0) {
@@ -126,27 +126,29 @@ Note that a block's state never depends on its own nVersion; only on that of its
 
 ```
         case STARTED:
-            int supportCount = 0;
-            int opposeCount = 0;
-            walk = block;
-            for (i = 0; i < 2016; i++) {
-                walk = walk.parent;
-                if (walk.nVersion & 0xE0000000 == 0x10000000) {
-                	int signal = getSignalForSlot(walk.nVersion, slotNumber);
-                	if (signal == 1) {
-                        ++supportCount;
-                    } else if (signal == 2) {
-                        ++opposeCount;
-                    }
-                }
-            }
-            if (thresholdReached(countSupport, countOppose, min_threshold, max_threshold)
-                && start_height + minimum_started_blocks <= block.height
-            ) {
-                return LOCKED_IN;
-            } else if (start_height + timeout <= block.height) {
+            if (start_height + timeout <= block.height) {
                 return FAILED;
             }
+            if (start_height + minimum_started_blocks <= block.height) {
+            	int supportCount = 0;
+	            int opposeCount = 0;
+    	        walk = block;
+        	    for (i = 0; i < 2016; i++) {
+            	    walk = walk.parent;
+                	if (walk.nVersion & 0xE0000000 == 0x10000000) {
+                		int signal = getSignalForSlot(walk.nVersion, slotNumber);
+	                	if (signal == 1) {
+    	                    ++supportCount;
+        	            } else if (signal == 2) {
+            	            ++opposeCount;
+                	    }
+	                }
+    	        }
+	            if (thresholdReached(supportCount, opposeCount, min_threshold, max_threshold)) {
+	            	lockedin_height = block.height;
+	                return LOCKED_IN;
+    	        }
+    	    }
             return STARTED;
 ```
 
@@ -165,7 +167,7 @@ After `should_signal_blocks`, we automatically transition to ACTIVE. Otherwise S
 
 ```
         case SHOULD_SIGNAL:
-            if (lockedin_height + lockedin_blocks <= block.height) {
+            if (lockedin_height + lockedin_blocks + should_signal_blocks <= block.height) {
                 return ACTIVE;
             } else {
                 return SHOULD_SIGNAL;
@@ -187,12 +189,12 @@ The signal slot is calculated by finding the ternary digit from the nVersion bit
 
 ```
 int getSignalForSlot(int nVersion, int slotIndex) {
-  int bucket = slotNumber/5;
+  int bucket = slotNumber / 5;
   int bucketIndex = slotNumber % 5;
-  int relevantBits = (nVersion >> 8*bucket) | 0xFF;
+  int relevantBits = (nVersion >> 8 * bucket) | 0xFF;
 
   for(var n=0; n<bucketIndex; n++) {
-    relevantBits = relevantBits/3;
+    relevantBits = relevantBits / 3;
   }
   
   return relevantBits % 3;
@@ -204,28 +206,23 @@ The required threshold is calculated depending on the amount of opposition signa
 ````
 bool thresholdReached(int supportCount, int opposeCount, int min_threshold, int max_threshold) {
   int maxPassingOpposition = 2016 - max_threshold;
-  int fractionOfMaxPassingOpposition = opposeCount/maxPassingOpposition;
   int requiredThreshold = min_threshold +
-                         (max_threshold-min_threshold)*fractionOfMaxPassingOpposition;
+                         (max_threshold-min_threshold)*opposeCount/maxPassingOpposition;
   return supportCount >= requiredThreshold;
 }
-
-min_threshold + (max_threshold-min_threshold)*fractionOfMaxPassingOpposition;
 ````
 
 The threshold calculated above has a linear relationship with the fraction of opposing signals. The following assumes the recommendations for `min_threshold` and `max_threshold` are used. If there is no opposition, only 60% support is needed to lock in the upgrade. If 5% of blocks are signaling opposition, 75% support signaling is required to lock in the upgrade. And if 10% of blocks are signaling opposition, all other 90% of blocks must be signaling support for the upgrade to lock in. This relationship both allows non-contentious upgrades to upgrade relatively easily and quickly while still allowing opposition to the upgrade to make lock in of the upgrade more difficult or fail entirely. 
 
 ![img](thresholdChart.png)
 
-#### Implementation
+#### Implementation notes
 
 It should be noted that the states are maintained along block chain branches, but may need recomputation when a reorganization happens.
 
-Given that the state for a specific block/deployment combination is completely determined by its ancestry before the current retarget period (i.e. up to and including its ancestor with height block.height - 1 - (block.height % 2016)), it is possible to implement the mechanism above efficiently and safely by caching the resulting state of every multiple-of-2016 block, indexed by its parent.
-
 ### Warning mechanism
 
-To support upgrade warnings, the signaling slots will all be checked for any signaling for slots without any related known update. Whenever LOCKED_IN for an unknown upgrade is detected, the software should warn loudly about the upcoming soft fork. It should warn even more loudly after the next retarget period (when the unknown upgrade is in the ACTIVE state).
+To support upgrade warnings, the signaling slots will all be checked for any signaling for slots without any related known update. Whenever LOCKED_IN for an unknown upgrade is detected, the software should warn loudly about the upcoming soft fork. It should warn even more loudly once the upcoming fork is in the ACTIVE state.
 
 ### getblocktemplate changes
 
@@ -256,7 +253,7 @@ TBD
 - Only 15 slots simultaneous upgrades are possible, vs 29 simultaneous upgrades.
 - In the most restrictive case, lock-in happens at 90% as opposed to BIP9's 95%, and lock-in can happen at substantially lower support signaling than that if there is little opposition. 
 - Has `minimum_started_blocks`, `lockedin_blocks`, and `should_signal_blocks` settings to allow reasonable time between state changes.
-- Has a SHOULD_SIGNAL state to give a monetary warning to stragglers to upgrade their node before the deployment becomes ACTIVE.
+- Has a SHOULD_SIGNAL state to give a financial warning to stragglers to upgrade their node before the deployment becomes ACTIVE.
 
 ## Contrasted with BIP 8
 
@@ -264,7 +261,7 @@ TBD
 - Lock-in can happen at significantly lower support signaling than BIP8's 90% supermajority requirement if there is little opposition. 
 - No LOT=true option. 
 - A combination of `minimum_started_blocks`, `lockedin_blocks`, and `should_signal_blocks` are used to determine activation height in a relative way instead of the absolute  `minimum_activation_height` setting.
-- Has a SHOULD_SIGNAL state to give a monetary warning to stragglers to upgrade their node before the deployment becomes ACTIVE. This was inspired by the MUST_SIGNAL state in BIP8.
+- Has a SHOULD_SIGNAL state to give a financial warning to stragglers to upgrade their node before the deployment becomes ACTIVE. This was inspired by the MUST_SIGNAL state in BIP8.
 
 ## Backwards compatibility
 
@@ -281,21 +278,21 @@ The thresholds do not have to be maintained for eternity, but changes should tak
 ## Rationale
 
 * Why is 60% signaling recommended as the `min_threshold`? 	
-  * 60% is a supermajority amount greater enough than 50% to be unlikely to be a fluke and also unlikely to change in the near future. IE if 60% of blocks signal support the upgrade now, its very unlikely that less than 50% of mining hashpower supports the upgrade, and also very unlikely that greater than 50% of mining hashpower would oppose the upgrade anytime in the next couple years.
+  * 60% is a supermajority amount greater enough than 50% to be unlikely to be a fluke and also unlikely to change in the near future - i.e. if 60% of blocks signal support the upgrade now, its very unlikely that less than 50% of mining hashpower supports the upgrade and also very unlikely that less than 50% of mining hashpower would support the upgrade anytime in the next couple years.
 * Why is 90% signaling recommended as the `max_threshold`?
-  * BIP8 recommends this value, and this BIP does not seek to change that standard in the case substantial opposition arises.
+  * BIP8 recommends this value and Taproot's deployment also used this threshold. This BIP does not seek to change that standard in the case that substantial opposition arises.
 * What is the rationale for the recommendations for `minimum_started_blocks`, `lockedin_blocks`, and `should_signal_blocks`?
   * Time should be given at each state for the community to react including having discussion and performing upgrade procedures. Its expected that the fastest miners to upgrade will be much faster than the slowest, which is why the `minimum_started_blocks` is substantially shorter than `lockedin_blocks + should_signal_blocks`. 
 * What is the SHOULD_SIGNAL state for? 
   * The SHOULD_SIGNAL state is intended to be a clear monetary signal to non-upgraded miners that they must upgrade or lose their revenue stream. Because almost 12.5% of non-supporting blocks will be orphaned, non-signaling miners and mining pools should be alerted to the issue by any system that helps them monitor their revenue and the health of their mining system. Even if they have not been paying attention to the progression of the soft-fork, they should at this point be spurred to look into the issue. 
 * How might the SHOULD_SIGNAL state affect the orphan rate and reorg risk?
-  * In the near-worst case scenario, at least 60% of miners would be signaling support, leading to approximately 5% of all blocks being orphaned, which would lead to only about 5 two-block reorgs happening in a relevant retargeting period and a 6 block reorg would remain very very unlikely (> 4 chances in 10,000 retarget periods). 
+  * In the near-worst case scenario, at least 60% of miners would be signaling support, leading to approximately 5% of all blocks being orphaned, which would lead to only about 5 two-block reorgs happening in a relevant retargeting period and a 6 block reorg would remain very very unlikely (< 4 chances in 10,000 retarget periods). 
 
 ## Alternative Designs
 
 ### Coexistence with BIP8 and BIP9
 
-This BIP could be changed such that some nVersion bits are assigned for use as specified in BIP8/BIP9 and other nVersion bits are allocated for use as trinary signaling data. It seems that this would only be useful in the case that ongoing BIP9/BIP8 soft forks are in progress while people want a soft fork using trinary signaling to begin or the case that some soft forks prefer to use BIP9/BIP8 for some reason. 
+This BIP could be changed such that some nVersion bits are assigned for use as specified in BIP8/BIP9 and other nVersion bits are allocated for use as trinary signaling data. It seems that this would only be useful in the case that ongoing BIP9/BIP8 soft forks are in progress while people want a soft fork using trinary signaling to begin or in the case that some soft forks prefer to use BIP9/BIP8 for some reason. 
 
 ## Deployments
 
