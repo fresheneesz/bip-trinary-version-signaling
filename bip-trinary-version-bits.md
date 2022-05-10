@@ -59,7 +59,7 @@ With each block and soft fork, we associate a deployment state. The possible sta
 1. **DEFINED** is the first state that each soft fork starts out as. The genesis block is by definition in this state for each deployment.
 2. **STARTED** for blocks at or beyond the start_height. A soft fork remains in STARTED state until at least `minimum_started_blocks` have passed since the start_height.
 3. **LOCKED_IN** for at least one retarget period after the first retarget period with STARTED blocks from which a number of blocks exceeding the threshold have the associated ternary slot set in nVersion. A soft fork remains in LOCKED_IN until `lockedin_blocks` have passed.
-4. **SHOULD_SIGNAL** for at least one retarget period after the first retarget period with LOCKED_IN blocks. A soft fork remains in SHOULD_SIGNAL state until `should_signal_blocks` have passed. During this state, miners should only mine on blocks not signaling support for the upgrade if the hash of the block modulo 8 equals 0.
+4. **SHOULD_SIGNAL** for at least one retarget period after the first retarget period with LOCKED_IN blocks. A soft fork remains in SHOULD_SIGNAL state until `should_signal_blocks` have passed. During this state, blocks for which the hash of the block modulo 8 equals 0 that are not signaling for the upgrade are considered invalid.
 5. **ACTIVE** for all blocks after the `should_signal_blocks` in SHOULD_SIGNAL state have passed.
 6. **FAILED** for all blocks after the `timeout` if LOCKED_IN has not been reached.
 
